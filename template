@@ -1,163 +1,178 @@
-kind: Template
 apiVersion: template.openshift.io/v1
+kind: Template
 metadata:
   name: quarkus-caixa-release
   namespace: openshift
   labels:
     template: createbyads
   annotations:
-    description: 'Template Open:Liberty Release'
+    description: "Template Open:Liberty Release"
     iconClass: icon-shadowman
     openshift.io/display-name: OpenLiberty Release Caixa
-    tags: 'hidden,quarkus,caixa'
-message: 'The following service(s) have been created in your project: ${NAME}.'
+    tags: "hidden,quarkus,caixa"
+
+message: "The following service(s) have been created in your project: ${NAME}."
+
 objects:
-  - apiVersion: v1
-    kind: Service
-    metadata:
-      annotations:
-        description: Exposes and load balances the application pods
-      labels:
-        application: '${NAME}'
-      name: '${NAME}'
-    spec:
-      ports:
-        - name: web
-          port: 8080
-          targetPort: 8080
-      selector:
-        name: '${NAME}'
-  - apiVersion: v1
-    kind: Service
-    metadata:
-      annotations:
-        description: Exposes and load balances the application pods
-      labels:
-        application: '${NAME}'
-        monitoring: quarkus-metrics
-      name: '${NAME}-metrics'
-    spec:
-      ports:
-        - name: metrics
-          port: 8080
-          targetPort: 8080
-      selector:
-        name: '${NAME}'
-  - apiVersion: v1
-    kind: Route
-    metadata:
-      annotations:
-        description: Route for application http service
-      labels:
-        application: '${NAME}'
-      name: '${NAME}'
-    spec:
-      host: '${APPLICATION_DOMAIN}'
-      port:
-        targetPort: web
-      tls:
-        insecureEdgeTerminationPolicy: Redirect
-        termination: edge
-      to:
-        kind: Service
-        name: '${NAME}'
-  - apiVersion: v1
-    kind: ImageStream
-    metadata:
-      annotations:
-        description: Keeps track of changes in the application image
-      labels:
-        application: '${NAME}'
-      name: '${NAME}'
-  - apiVersion: v1
-    kind: DeploymentConfig
-    metadata:
-      annotations:
-        description: Defines how to deploy the application server
-      labels:
-        application: '${NAME}'
-      name: '${NAME}'
-    spec:
-      replicas: 1
-      revisionHistoryLimit: 1
-      selector:
-        name: '${NAME}'
-      strategy:
-        activeDeadlineSeconds: 21600
-        resources: {}
-        rollingParams:
-          intervalSeconds: 1
-          maxSurge: 25%
-          maxUnavailable: 25%
-          timeoutSeconds: 600
-          updatePeriodSeconds: 1
-        type: Rolling
-      template:
-        metadata:
-          labels:
-            name: '${NAME}'
-          name: '${NAME}'
-        spec:
-          containers:
-            - env:
-                - name: TZ
-                  value: America/Sao_Paulo
-              image: '${NAME}'
-              livenessProbe:
-                httpGet:
-                  path: /q/health/live
-                  port: 8080
-                initialDelaySeconds: 15
-                timeoutSeconds: 3
-              name: '${NAME}'
-              ports:
-                - containerPort: 8080
-              readinessProbe:
-                failureThreshold: 3
-                httpGet:
-                  path: /q/health/ready
-                  port: 8080
-                  scheme: HTTP
-                initialDelaySeconds: 25
-                periodSeconds: 10
-                successThreshold: 1
-                timeoutSeconds: 5
-              resources:
-                limits:
-                  cpu: '${CPU_LIMIT}'
-                  memory: '${MEMORY_LIMIT}'
-                requests:
-                  cpu: '${CPU_LIMIT}'
-                  memory: '${MEMORY_LIMIT}'
-      triggers: []
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: ${NAME}
+    labels:
+      application: ${NAME}
+    annotations:
+      description: Exposes and load balances the application pods
+  spec:
+    selector:
+      name: ${NAME}
+    ports:
+      - name: web
+        port: 8080
+        targetPort: 8080
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: ${NAME}-metrics
+    labels:
+      application: ${NAME}
+      monitoring: quarkus-metrics
+    annotations:
+      description: Exposes metrics
+  spec:
+    selector:
+      name: ${NAME}
+    ports:
+      - name: metrics
+        port: 8080
+        targetPort: 8080
+
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: ${NAME}
+    labels:
+      application: ${NAME}
+    annotations:
+      description: Route for application http service
+  spec:
+    host: ${APPLICATION_DOMAIN}
+    to:
+      kind: Service
+      name: ${NAME}
+    port:
+      targetPort: web
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+
+- apiVersion: image.openshift.io/v1
+  kind: ImageStream
+  metadata:
+    name: ${NAME}
+    labels:
+      application: ${NAME}
+    annotations:
+      description: Keeps track of changes in the application image
+
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: ${NAME}
+    labels:
+      application: ${NAME}
+    annotations:
+      description: Defines how to deploy the application server
+  spec:
+    replicas: 1
+    revisionHistoryLimit: 1
+
+    selector:
+      matchLabels:
+        name: ${NAME}
+
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 25%
+        maxUnavailable: 25%
+
+    template:
+      metadata:
+        labels:
+          name: ${NAME}
+
+      spec:
+        containers:
+          - name: ${NAME}
+
+            image: ${NAME}:${BUILD_NUMBER}
+            imagePullPolicy: IfNotPresent
+
+            env:
+              - name: TZ
+                value: America/Sao_Paulo
+
+            ports:
+              - containerPort: 8080
+
+            resources:
+              requests:
+                cpu: ${CPU_LIMIT}
+                memory: ${MEMORY_LIMIT}
+              limits:
+                cpu: ${CPU_LIMIT}
+                memory: ${MEMORY_LIMIT}
+
+            livenessProbe:
+              httpGet:
+                path: /q/health/live
+                port: 8080
+              initialDelaySeconds: 15
+              timeoutSeconds: 3
+
+            readinessProbe:
+              httpGet:
+                path: /q/health/ready
+                port: 8080
+              initialDelaySeconds: 25
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 3
+              successThreshold: 1
+
 parameters:
-  - name: NAME
-    displayName: Name
-    description: The name assigned to all of the frontend objects defined in this template.
-    value: quarkus
-    required: true
-  - name: NAMESPACE
-    displayName: Namespace
-    description: The OpenShift Namespace where the ImageStream resides.
-    value: openshift
-    required: true
-  - name: MEMORY_LIMIT
-    displayName: Memory Limit
-    description: Maximum amount of memory the application container can use.
-    value: 1024Mi
-    required: true
-  - name: CPU_LIMIT
-    displayName: Cpu Limit
-    description: Maximum amount of cpu the application container can use.
-    value: '1'
-    required: true
-  - name: APPLICATION_DOMAIN
-    displayName: Application Hostname
-    description: 'The exposed hostname that will route to the service, if left blank a value will be defaulted.'
-  - name: BUILD_NUMBER
-    displayName: Build Number ADS
-    description: Number of Build made on Azure Devops Server (latest by default).
-    value: latest
-    required: true
+
+- name: NAME
+  displayName: Name
+  description: Application name
+  value: quarkus
+  required: true
+
+- name: NAMESPACE
+  displayName: Namespace
+  description: Namespace where the ImageStream resides.
+  value: openshift
+  required: true
+
+- name: MEMORY_LIMIT
+  displayName: Memory Limit
+  value: 1024Mi
+  required: true
+
+- name: CPU_LIMIT
+  displayName: CPU Limit
+  value: "1"
+  required: true
+
+- name: APPLICATION_DOMAIN
+  displayName: Application Hostname
+
+- name: BUILD_NUMBER
+  displayName: Build Number ADS
+  value: latest
+  required: true
+
 labels:
   template: quarkus-caixa-release
