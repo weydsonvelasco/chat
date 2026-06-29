@@ -1,0 +1,13 @@
+oc label node worker-01 k8s.ovn.org/egress-assignable=""
+oc label node worker-02 k8s.ovn.org/egress-assignable=""
+
+apiVersion: k8s.ovn.org/v1
+kind: EgressIP
+metadata:
+  name: projeto-egress
+spec:
+  egressIPs:
+    - 192.168.100.10
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: meu-projeto
